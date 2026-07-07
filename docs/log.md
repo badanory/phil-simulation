@@ -1,5 +1,10 @@
 # Change Log
 
+## 2026-07-07
+- 10:27 KST (UTC+9) — apply_timing_*.csv 산출물을 `timing_log/` 디렉터리로 이동, 로거도 거기에 쓰도록 변경
+  - 수정 파일: `simul.py`, `timing_log/`(신규, 기존 CSV 22개 이동)
+  - 메모: `_open_timing_log()`가 `Path(__file__).parent`(레포 루트) 바로 아래에 `apply_timing_N.csv`를 흩뿌려 트리가 지저분했음. base를 `.../timing_log`로 바꾸고 `mkdir(exist_ok=True)`로 매 재시작 안전하게 생성. 기존 `apply_timing_1..22.csv`는 `timing_log/`로 `mv`. 파일명 패턴(`apply_timing_N`)·헤더·N 탐색 로직은 그대로.
+
 ## 2026-06-25
 - 11:25 KST (UTC+9) — 드럼패드 좌표 파일을 SIL 내부로 vendoring해 컨트롤러 트리 의존성 제거
   - 수정 파일: `sil/visuals.py`, `assets/drum_position.txt`(신규)

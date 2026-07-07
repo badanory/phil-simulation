@@ -409,11 +409,12 @@ class FrameSimulator:
                 return
             view = view[sent:]
 
-    # [TIMING] 재시작마다 apply_timing_N.csv 새로 연다(덮어쓰기 방지).
+    # [TIMING] 재시작마다 timing_log/apply_timing_N.csv 새로 연다(덮어쓰기 방지).
     def _open_timing_log(self):
-        base = Path(__file__).resolve().parent
+        log_dir = Path(__file__).resolve().parent / "timing_log"
+        log_dir.mkdir(exist_ok=True)
         for n in range(1, 1000):
-            path = base / f"apply_timing_{n}.csv"
+            path = log_dir / f"apply_timing_{n}.csv"
             if not path.exists():
                 handle = open(path, "w")
                 handle.write("elapsed_s,stream,joint,deg\n")
