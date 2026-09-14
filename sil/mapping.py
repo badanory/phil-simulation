@@ -206,6 +206,16 @@ def joint_to_motor_rad(name: str, joint_deg: float) -> float:
     return math_rad((joint_deg - spec["init_deg"]) * spec["cw_dir"])
 
 
+def motor_to_joint_torque(name: str, torque_mnm: float) -> float:
+    # wire torque는 모터축 부호다. position의 motor_to_joint_deg처럼
+    # cw_dir을 적용해 production joint 부호로 바꾼다. 이게 빠지면
+    # cw_dir=-1 모터(양 손목)에서 CST PD 폐루프가 양성 피드백이 된다.
+    spec = motor_spec(name)
+    if spec is None:
+        return 0.0
+    return torque_mnm * spec["cw_dir"]
+
+
 def dxl_to_urdf_deg(name: str, dxl_deg: float) -> Optional[Dict[str, float]]:
     if name == "head_tilt":
         dxl_deg = 90.0 - dxl_deg

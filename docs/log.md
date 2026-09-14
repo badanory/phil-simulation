@@ -1,5 +1,32 @@
 # Change Log
 
+## 2026-07-16
+- 11:31 KST (UTC+9) — CST 경로 최소 수정 2건: torque decode 부호(cw_dir) 재적용 + 손목 URDF limit runtime patch
+  - 수정 파일: `sil/mapping.py`(`motor_to_joint_torque`), `sil/router.py`(maxon_torque 분기), `sil/urdf_tools.py`(`RUNTIME_JOINT_LIMIT_PATCH`)
+  - 메모: 사용자 지목("CST decode/encode 문제") 검증 결과 두 가지 확정. (1) **decode 부호**: CST torque만 wire(모터축)→production joint 변환에서 cw_dir 누락(position/velocity는 적용됨) — 어제 규명한 그 버그, 최소 형태로 재적용. (2) **URDF limit**: SolidWorks 내보내기 URDF의 손목 joint limit이 `lower=0 upper=0 effort=0` — resetJointState 경로는 limit 무시라 무증상이었지만 TORQUE_PHYSICS(HEAD 기본) 경로에서는 PyBullet limit 솔버가 관절을 [0,0]으로 끌어당겨 PD와 줄다리기(45° 목표에 18~25°서 진동, 실측). runtime URDF patch로 손목만 motors.json 실기 범위(production −90..100°→URDF 부호 변환, L[−90,100]/R[−100,90], effort 3Nm, velocity 30.2rad/s) 보강 — 체크인 URDF 무수정 원칙 유지. 검증(실제 can3, physics 모드, kp=60/kd=1): step 90→45° 폭주 없이 45.01° 수렴. 히트 파형: max err 27.8°, 바닥 53.1°(목표 65), 잔진동 13.6° p-p — 60/1 저감쇠 특성만큼의 물렁함은 잔존(게인은 컨트롤러 소관), legacy 게인(300/30)이면 max err 10°/잔진동 0. GUI 풀스택 타이밍 층은 미검증.
+
+- 11:20 KST (UTC+9) — [전체 revert] 07-15~16 손목 관련 SIL 수정 전부 되돌림 (사용자 지시)
+  - 수정 파일: `sil/router.py`, `sil/mapping.py`, `simul.py` — git checkout으로 HEAD(48fe5eb) 복원
+  - 메모: 아래 07-15~16 항목의 코드 변경(TORQUE_PHYSICS off, torque cw_dir 부호 수정, torque watchdog, SYNC feedback 소스 변경, 손목 플랜트 보강)이 전부 제거됨. 로그 항목은 조사 기록으로 유지. 복원된 HEAD 상태 = TORQUE_PHYSICS=True + torque decode에 cw_dir 없음 → 새 컨트롤러 CST 폐루프에서는 부호 반전으로 손목이 URDF limit에 박히는 07-14 이전 증상으로 돌아감. 풀스택(GUI)에서 관측된 "손목 과도한 흔들림"은 direct 모드 검증으로 못 잡은 main loop 타이밍 층(GUI 스톨 → feedback 지연 > 60/1 게인의 위상 여유 ~15ms)이 유력 — 재작업 시 TMotor처럼 Maxon 버스 전용 스레드 분리 + 부호 수정 재적용 조합이 최소 세트로 추정.
+- 11:11 KST (UTC+9) — 손목 1D 플랜트를 Phil-drum-robot 설정 기준으로 보강 (중력·하드스톱·부하 마찰) — 컨트롤러 게인(60/1) 무수정 방침
+  - 수정 파일: `sil/router.py`
+  - 메모: 사용자 방침 = 컨트롤러(motors.json kp=60/kd=1, CST)는 그대로 두고 SIL 플랜트를 실기에 맞게 수정. 기존 1D 모델에 없던 실기 요소 3개 추가. (1) **중력**: 컨트롤러 `cal_torque` 보상 모델과 동일 정의(상수 0.0845kg/0.121m, gravity_angle=팔2+팔3+손목 합)로 플랜트에 중력 토크 추가 — 보상이 상쇄 대상 없이 외란으로 작용하던 것 해소(정지 droop 3°→0). (2) **기계 하드스톱**: motors.json min/max(−90°/100°)와 동일한 가동 범위, 초과 시 경계 고정+속도 0. (3) **부하 Coulomb 마찰** `WRIST_COULOMB_NM=0.22`: 무부하 전류 기반 0.019Nm은 부하 기어 마찰·패드 접촉·구조 소산을 과소평가 — 스윕(0.019~0.22) 실측으로 잔진동/타격 정확도 최적값 채택(경험값, 하드웨어 식별 시 교체). 검증(실제 can3 wire, 히트 파형): kp=60/kd=1로 최대 lag 23°(대역폭 한계, 잔존), 스트라이크 바닥 61.7°(목표 65, 이전 44.1° 과관통), **잔진동 38.1°→1.0° p-p**, 정지 90.0° 고정. legacy 게인(300/30)도 여전히 정상(max err 10°). 남은 한계: 100ms 스트라이크에 ~80ms 지연은 60/1 게인의 물리적 대역폭 한계라 플랜트로는 해소 불가 — 실기에서도 동일할 것으로 추정되며, 타격 타이밍이 문제 되면 컨트롤러 게인/kpMax 스케줄 논의로.
+- 10:14 KST (UTC+9) — [조사] 손목 CST 부실 제어의 legacy 대비 차이 규명 (SIL 코드 변경 없음, harness 실측)
+  - 수정 파일: 없음 (분석: `legacy/DrumRobot2` CanManager/PathManager vs `Phil-drum-robot` trajectory_generator/controller)
+  - 메모: 손목 wire 스트림 차이는 두 가지. (1) **모드**: legacy는 brain 경로 기본이 CSP(위치 궤적, 히트 파형 포함)라 SIL이 정확 추종 — CST는 수동 메뉴로 게인을 직접 입력할 때만. 새 컨트롤러는 play 중 손목 CST 고정(`get_modes(true)`). (2) **CST 게인**: legacy CST 기준값 Kp=300/Kd=30(rad 단위) vs 새 컨트롤러 motors.json kp=60/kd=1 — 5배 무르고 30배 덜 감쇠(ζ≈2.7 vs ≈0.2). 그 외(1kHz 보간, SYNC, CSP/CST 전환 SDO 시퀀스, 중력보상 상수 0.0845kg/0.121m)는 동일. 실측(can3, 히트 파형 90→110→65→90, 스트라이크 100ms): 60/1은 최대 추종오차 32.5°, 스트라이크 바닥 44.1°(목표 65, 과관통), 히트 후 잔진동 38.1° p-p — 연주 중 손목이 계속 출렁이고 범위체크(−90/100°)를 스치면 컨트롤러 사망으로 이어짐. 300/30은 최대 오차 3.4°, 바닥 64.1°, 잔진동 0.1° — legacy CST 게인이면 현 SIL 1D 플랜트로도 정상 연주 가능. 결론: SIL은 장치 계약대로 동작하며(어제 부호/watchdog 수정 후), 남은 원인은 Phil-drum-robot 쪽 게인/모드 — motors.json 게인 인상(300/30) 또는 legacy처럼 play 중 손목 CSP 사용이 후보. 하드웨어에도 영향 가는 값이라 컨트롤러 쪽 수정은 보류.
+- 10:01 KST (UTC+9) — 손목 "무한 빙글빙글" 수정: torque 명령 두절 시 홀드하는 watchdog + 1D 모드 SYNC feedback 소스를 router로 변경
+  - 수정 파일: `sil/router.py`, `simul.py`
+  - 메모: 어제 부호 수정 후에도 손목이 계속 회전한다는 증상의 재현/원인. 실제 wire(can3) 위에 컨트롤러 CST 경로를 그대로 재현한 harness(rad 단위 PD kp=60/kd=1, 1kHz 명령+SYNC)로 실측한 결과 (1) CST 폐루프 자체는 부호 수정 후 정상(90→45° 수렴, ±0.1° 유지), (2) 컨트롤러가 죽어 bus가 침묵하면(범위초과 → recv/send loop 종료가 정확히 이 경로) 마지막 torque가 router에 남아 손목이 속도클램프(1731deg/s)로 **영원히 회전** — 침묵 2.4s에 −4107° 실측. 실제 손목은 하드스톱/케이블에 잡히지만 SIL 1D 적분엔 경계가 없음. 수정: `TORQUE_HOLD_TIMEOUT=0.1s` — torque 모드에서 새 명령이 0.1s 이상 안 오면 속도/토크 0으로 그 자리에 홀드(1D 경로), 물리 경로(`torque_targets`)는 토크 0 인가로 마찰 감속. 정상 CST는 1kHz 스트림이라 timeout에 절대 안 걸림. 추가로 1D 모드의 Maxon SYNC 응답을 PyBullet 읽기 대신 router 적분값(진실의 원천)에서 직접 생성 — GUI 스톨로 main loop가 늦어져도 feedback 각도가 낡지 않게 함(CST는 rad 단위 kp=60이라 ζ≈0.2, 지연 여유 ~15ms로 추정되는 경계 시스템). 재검증: harness phase1 수렴 동일, phase2 침묵 후 −73.4°에서 정지(이전 무한 회전), 오프라인 폐루프 스모크 회귀 통과, `compileall` 통과.
+  - 남은 리스크: GUI 모드에서 main loop 자체가 크게 스톨하면 SYNC 응답 지연은 여전히 가능(TMotor처럼 Maxon 버스 전용 스레드 분리가 다음 단계 후보). 재생 중 손목 진동/불안정이 보이면 이쪽을 볼 것.
+
+## 2026-07-15
+- 17:09 KST (UTC+9) — 손목 CST 폭주 수정: torque decode 경로에 빠져 있던 `cw_dir` 적용
+  - 수정 파일: `sil/mapping.py`(`motor_to_joint_torque` 추가), `sil/router.py`(`route_can`의 maxon_torque 분기)
+  - 메모: PLAY 진입 시 `MaxonMotor 범위 초과 (left_wrist) joint=-140.4deg`로 컨트롤러가 죽는 원인. position(`motor_to_joint_deg`)/TMotor·Maxon velocity 변환은 전부 `cw_dir`을 적용하는데 torque만 wire 부호(모터축) 그대로 production joint에 적분하고 있었음. 양 손목이 `cw_dir=-1`이라 새 컨트롤러(`cal_torque`)의 PD 폐루프 기준으로 플랜트 부호가 반전 → +torque일수록 feedback position이 반대로 가서 err 증가 → 양성 피드백 폭주. 물리 경로(TORQUE_PHYSICS=True)에도 같은 버그가 있었으나 PyBullet URDF joint limit이 폭주를 가려 "손목이 이상함"으로만 보였음(이번 수정은 두 경로 공통 지점인 route 시점 변환이라 물리 경로도 함께 고쳐짐). 검증: 컨트롤러 PD(kp=60, kd=1, deg 단위, direction_sign=-1) 재현 폐루프 스모크에서 수정 후 양 손목 90→45° 수렴·유지, 수정 전 재현 시 0.3s 만에 90→415° 단조 폭주 확인. `compileall` 통과.
+- 16:45 KST (UTC+9) — 손목 PyBullet torque 동역학 경로 비활성화 (`TORQUE_PHYSICS = True → False`)
+  - 수정 파일: `sil/router.py`
+  - 메모: 06-19에 추가된 PyBullet 실제 동역학 경로(미검증 표기)를 끄고, 이전 기본이던 결정론적 1D 손적분(`_advance_torque`, datasheet 상수 + `resetJointState`)으로 복귀. 플래그가 router 적분 분기 / `simul._step_torque_physics` / backend 고정 timestep·torque joint 활성화를 모두 게이트하므로 한 줄 변경으로 전체 경로가 꺼짐. 손목 거동 비교 실험용이며, 물리 경로로 되돌리려면 플래그만 다시 True.
+
 ## 2026-07-07
 - 10:27 KST (UTC+9) — apply_timing_*.csv 산출물을 `timing_log/` 디렉터리로 이동, 로거도 거기에 쓰도록 변경
   - 수정 파일: `simul.py`, `timing_log/`(신규, 기존 CSV 22개 이동)

@@ -73,6 +73,35 @@ RUNTIME_LINK_FRAME_PATCH_POSE = {
 }
 
 
+# ================================================================
+# RUNTIME_JOINT_LIMIT_PATCH
+# ================================================================
+# SolidWorks 내보내기 URDF는 revolute joint limit이 lower=0 upper=0
+# effort=0으로 비어 있다. resetJointState 경로는 limit을 무시해서 티가
+# 안 났지만, TORQUE_PHYSICS 경로에서는 PyBullet limit 솔버가 관절을
+# [0,0] 범위로 끌어당겨 torque 제어와 줄다리기를 한다 (손목이 목표에
+# 못 가고 낮은 각도에서 진동하는 원인). 체크인 URDF는 두고 runtime
+# 복사본에서 torque 관절(손목)의 limit만 실기 값으로 보강한다.
+#   - 각도: Phil-drum-robot config/motors.json min/max(-90..100 deg)를
+#     production→URDF 부호로 변환한 값 (left sign +1, right sign -1)
+#   - effort: 기어 순간 허용 토크 3 Nm
+#   - velocity: 무부하 속도 출력단 환산 약 30.2 rad/s
+RUNTIME_JOINT_LIMIT_PATCH = {
+    "left_wrist": {
+        "lower_deg": -90.0,
+        "upper_deg": 100.0,
+        "effort_nm": 3.0,
+        "velocity_rad_s": 30.2,
+    },
+    "right_wrist": {
+        "lower_deg": -100.0,
+        "upper_deg": 90.0,
+        "effort_nm": 3.0,
+        "velocity_rad_s": 30.2,
+    },
+}
+
+
 def build_runtime_urdf(source_urdf: Path, output_dir: Path) -> Path:
     """
     Build a runtime-only URDF that PyBullet can load directly.
@@ -104,6 +133,24 @@ def build_runtime_urdf(source_urdf: Path, output_dir: Path) -> Path:
             continue
 
         _set_link_origin_pose(link, patch_pose["xyz_m"], patch_pose["rpy_deg"])
+
+    # ==========
+    # runtime joint limit patch (torque 관절 전용)
+    # ==========
+    for joint in root.findall("joint"):
+        joint_name = joint.get("name", "")
+        limit_patch = RUNTIME_JOINT_LIMIT_PATCH.get(joint_name)
+        if limit_patch is None:
+            continue
+
+        limit_node = joint.find("limit")
+        if limit_node is None:
+            limit_node = ET.SubElement(joint, "limit")
+
+        limit_node.set("lower", str(_deg_to_rad(limit_patch["lower_deg"])))
+        limit_node.set("upper", str(_deg_to_rad(limit_patch["upper_deg"])))
+        limit_node.set("effort", str(limit_patch["effort_nm"]))
+        limit_node.set("velocity", str(limit_patch["velocity_rad_s"]))
 
     output_path = output_dir / f"{source_urdf.stem}.pybullet.urdf"
     tree.write(output_path, encoding="utf-8", xml_declaration=True)

@@ -11,6 +11,7 @@ from .mapping import (
     dxl_to_urdf_deg,
     joint_load_inertia,
     motor_to_joint_deg,
+    motor_to_joint_torque,
     production_to_urdf_deg,
     production_to_urdf_torque,
 )
@@ -105,7 +106,8 @@ class MotorRouter:
 
         if command.kind == "maxon_torque" and command.torque_mnm is not None:
             self.motor_mode[motor] = "torque"
-            self.motor_torque[motor] = command.torque_mnm
+            # wire(모터축) 부호 → production joint 부호. position 경로와 대칭.
+            self.motor_torque[motor] = motor_to_joint_torque(motor, command.torque_mnm)
             return None
 
         return None
