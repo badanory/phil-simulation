@@ -1,3 +1,42 @@
+<div align="center">
+  <h1>phil-simulation</h1>
+  <p><b>Frame-level simulation-in-the-loop for Phil, the AI drummer robot.</b><br/>
+  The real controller's raw SocketCAN frames and Dynamixel packets, replayed into PyBullet.</p>
+  <p>
+    <img src="https://img.shields.io/badge/Python-3776AB?style=flat-square&logo=python&logoColor=white" />
+    <img src="https://img.shields.io/badge/PyBullet-2D3E50?style=flat-square" />
+    <img src="https://img.shields.io/badge/SocketCAN%20%2F%20vcan-333333?style=flat-square&logo=linux&logoColor=white" />
+    <img src="https://img.shields.io/badge/Dynamixel%20Protocol%202.0-2E7D32?style=flat-square" />
+    <img src="https://img.shields.io/badge/URDF-8E44AD?style=flat-square" />
+  </p>
+  <img src="artifacts/Simulation_intheloop.png" alt="PyBullet SIL view of Phil" width="720" />
+</div>
+
+## At a glance
+
+Most robot simulators sit *above* the controller and consume high-level commands. This one sits *below* it, at the device boundary. The unmodified C++ controller ([phil-control](https://github.com/badanory/phil-control)) talks to `vcan0..3` and a PTY exactly as it would to USB-CAN adapters and a Dynamixel U2D2. This package decodes every frame, drives a PyBullet model of the robot, and answers with the feedback frames the controller expects. Nothing in the controller knows it is being simulated.
+
+- **Device boundary**: `setup_sil.sh` brings up `vcan0..3` and a `socat` PTY pair exposed as `/dev/ttyUSB0`, and refuses to overwrite a real device or a foreign symlink.
+- **Decode / encode** (`sil/decoder.py`, `sil/encoder.py`): TMotor servo frames, Maxon CANopen SDO/PDO (CSP / CST / homing), Dynamixel Protocol 2.0 packets, plus the matching status and feedback replies.
+- **Routing and mapping** (`sil/router.py`, `sil/mapping.py`): CAN ID / DXL ID → motor → URDF joint, carrying the production robot's sign and offset conventions.
+- **Backend** (`sil/pybullet_backend.py`, `sil/urdf_tools.py`): PyBullet viewer with runtime URDF patching, so the checked-in URDF/STL assets stay untouched.
+- **Observability**: per-motor state tracking, color-coded joint visuals and the debugging commands documented below.
+
+```text
+phil-interaction ─▶ TCP ─▶ phil-control ─▶ can_frame / DXL packet ─▶ vcan0..3 / PTY ─▶ [ phil-simulation ] ─▶ PyBullet
+                                         ◀── feedback frames / status packets ◀──────────────┘
+```
+
+| Repo | Role |
+|:--|:--|
+| [phil-control](https://github.com/badanory/phil-control) | C++17 real-time body controller (the device under test) |
+| [phil-interaction](https://github.com/badanory/phil-interaction) | Python brain: Whisper STT → LLM planner → validated commands → MeloTTS |
+| **phil-simulation** (this repo) | Frame-level PyBullet SIL |
+
+> Developed at KIST. The detailed documentation below is in Korean; `DrumRobot2` there refers to the controller now published as phil-control. / 아래부터는 상세 한국어 문서입니다.
+
+---
+
 # Drum_intheloop
 
 `Drum_intheloop`는 `DrumRobot2`가 실제 장치 경계로 내보내는
