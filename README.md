@@ -8,6 +8,7 @@
     <img src="https://img.shields.io/badge/SocketCAN%20%2F%20vcan-333333?style=flat-square&logo=linux&logoColor=white" />
     <img src="https://img.shields.io/badge/Dynamixel%20Protocol%202.0-2E7D32?style=flat-square" />
     <img src="https://img.shields.io/badge/URDF-8E44AD?style=flat-square" />
+    <a href="https://www.youtube.com/watch?v=e5yeaPhEgs8"><img src="https://img.shields.io/badge/▶%20Watch%20Phil%20play-YouTube-FF0000?style=flat-square&logo=youtube&logoColor=white" alt="Watch Phil play on YouTube" /></a>
   </p>
   <img src="artifacts/Simulation_intheloop.png" alt="PyBullet SIL view of Phil" width="720" />
 </div>
