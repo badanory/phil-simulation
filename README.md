@@ -32,6 +32,7 @@ phil-interaction ─▶ TCP ─▶ phil-control ─▶ can_frame / DXL packet �
 | [phil-control](https://github.com/badanory/phil-control) | C++17 real-time body controller (the device under test) |
 | [phil-interaction](https://github.com/badanory/phil-interaction) | Python brain: Whisper STT → LLM planner → validated commands → MeloTTS |
 | **phil-simulation** (this repo) | Frame-level PyBullet SIL |
+| [phil-midi-converter](https://github.com/badanory/phil-midi-converter) | MIDI ↔ score converter: builds Phil's text scores from Groove MIDI Dataset drum tracks |
 
 > Developed at KIST. The detailed documentation below is in Korean; `DrumRobot2` there refers to the controller now published as phil-control. / 아래부터는 상세 한국어 문서입니다.
 
